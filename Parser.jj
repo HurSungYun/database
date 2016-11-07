@@ -1,0 +1,387 @@
+options
+{
+    static = true;
+    DEBUG_PARSER = false;
+    IGNORE_CASE = true;
+}
+
+PARSER_BEGIN(SimpleDBMSParser)
+package simpledbms;
+import com.sleepycat.je.*;
+import java.util.*;
+import java.io.*;
+
+public class SimpleDBMSParser {
+    public static final String PROMPT = "DB_2014-12472> ";
+
+    enum QueryType {
+        SYNTAX_ERROR,
+        CREATE_TABLE,
+        DESC,
+        DROP_TABLE,
+        SELECT,
+        INSERT,
+        DELETE,
+        SHOW_TABLES
+    };
+
+    static SchemaManager schemaManager;
+
+    public static void main(String args[]) throws ParseException {
+
+        EnvironmentConfig ec = new EnvironmentConfig();
+        ec.setAllowCreate(true);
+        Environment env = new Environment(new File("db/"), ec);
+
+        DatabaseConfig dc = new DatabaseConfig();
+        dc.setAllowCreate(true);
+        dc.setSortedDuplicates(true);
+
+        SimpleDBMSParser p = new SimpleDBMSParser(System.in);
+        schemaManager = new SchemaManager(env, dc);
+        System.out.print(PROMPT);
+        while (true) {
+            try {
+                p.command();
+            } catch (DBError.CreateError e) {
+                System.out.println(e.getMessage());
+            } catch (Throwable e) {
+                printMessage(QueryType.SYNTAX_ERROR);
+                SimpleDBMSParser.ReInit(System.in);
+            }
+        }
+    }
+
+    public static void printMessage(QueryType f) {
+        switch(f) {
+            case SYNTAX_ERROR:
+                System.out.println("Syntax error");
+                break;
+            case CREATE_TABLE:
+                System.out.println("\'CREATE TABLE\' requested");
+                break;
+            case DESC:
+                System.out.println("\'DESC\' requested");
+                break;
+            case SELECT:
+                System.out.println("\'SELECT\' requested");
+                break;
+            case INSERT:
+                System.out.println("\'INSERT\' requested");
+                break;
+            case DELETE:
+                System.out.println("\'DELETE\' requested");
+                break;
+            case SHOW_TABLES:
+                System.out.println("\'SHOW TABLES\' requested");
+                break;
+        }
+        System.out.print(PROMPT);
+    }
+}
+PARSER_END(SimpleDBMSParser)
+
+SKIP : { " " | "\r" | "\t" | "\n" }
+
+/* commands */
+TOKEN : {
+  < CREATE_TABLE : < CREATE >" " < TABLE > >
+| < DESC : "desc" >
+| < DELETE_FROM : < DELETE > " " < FROM > >
+| < DROP_TABLE : < DROP > " " < TABLE > >
+| < INSERT_INTO : < INSERT > " " < INTO > >
+| < SHOW_TABLES : < SHOW > " " < TABLE >"s" >
+| < EXIT : "exit" >
+}
+
+/* types, constraints */
+TOKEN : {
+  < INT : "int" >
+| < CHAR : "char" >
+| < DATE : "date" >
+| < NOT_NULL : < NOT >" "< NULL > >
+| < PRIMARY_KEY : "primary " < KEY > >
+| < FOREIGN_KEY : "foreign " < KEY > >
+| < REFRENCES : "refrences" >
+| < NULL : "null" >
+}
+
+
+/* illegal identifiers */
+TOKEN : {
+  < AS : "as" >
+| < ASTER : "*" >
+| < FROM : "from" >
+| < WHERE : "where" >
+| < AND : "and" >
+| < OR : "or" >
+| < NOT : "not" >
+| < IS : "is" >
+| < TABLE : "table" >
+| < INTO : "into" >
+| < KEY : "key" >
+| < VALUES : "values" >
+| < DROP : "drop" >
+| < SHOW : "show" >
+| < CREATE : "create" >
+| < SELECT : "select" >
+| < INSERT : "insert">
+| < DELETE : "delete">
+}
+
+/* chunks */
+TOKEN : {
+  < LEGAL_IDENTIFIER : < ALPHABET >(< ALPHABET >|< UNDERSCORE >)*>
+| < INT_VALUE : (< SIGN >)? (< DIGIT >)+>
+| < CHAR_STRING : < QUOTE > (< NON_QUOTE_CHAR >)* < QUOTE > >
+| < DATE_VALUE : < NNNN >"-"< NN >"-"< NN >>
+| < NNNN : < DIGIT >< DIGIT >< DIGIT >< DIGIT > >
+| < NN : < DIGIT >< DIGIT > >
+}
+
+/* parts */
+TOKEN : {
+  < SEMICOLON : ";" >
+| < LEFT_PAREN : "(" >
+| < RIGHT_PAREN : ")" >
+| < COMMA : "," >
+| < DOT : "." >
+| < UNDERSCORE : "_" >
+| < SIGN : "+" | "-" >
+| < DIGIT : [ "0" - "9" ] >
+| < ALPHABET : [ "A" - "Z", "a" - "z" ] >
+| < COMP_OP : "<"|">"|"="|">="|"<="|"!=" >
+}
+
+/* nasty quotes */
+TOKEN : {
+  < QUOTE : "'" >
+| < NON_QUOTE_CHAR : < DIGIT >|< ALPHABET >|" "|< NON_Q_SP >>
+| < NON_Q_SP : "!"|"@"|"#"|"$"|"%"|"^"|"&"|"*"|"("|")"|"["|"]"|"-"|"+"|"_"|"="|"\\"|"{"|"}"|":"|";"|"<"|">"|","|"."|"/"|"?"|"`"|"~" >
+}
+
+void command() throws Exception : {} {
+    query_list()|< EXIT >< SEMICOLON >{System.exit(0);}
+}
+
+void query_list() : { QueryType q; } {
+    ( q = query() < SEMICOLON > {
+        printMessage(q);
+    })+
+}
+
+QueryType query() : { QueryType q; } {
+    ( create_table_query() {
+        q = QueryType.CREATE_TABLE;
+    }|drop_table_query() {
+        q = QueryType.DROP_TABLE;
+    }|desc_query() {
+        q = QueryType.DESC;
+    }|select_query() {
+        q = QueryType.SELECT;
+    }|insert_query() {
+        q = QueryType.INSERT;
+    }|delete_query() {
+        q = QueryType.DELETE;
+    }|show_tables_query() {
+        q = QueryType.SHOW_TABLES;
+    })
+    ({ return q; })
+}
+
+// query
+void create_table_query() : { String n; } {
+    < CREATE_TABLE >
+    n = table_name()
+    table_elem_list()
+}
+
+void drop_table_query() : { String n; } {
+    < DROP_TABLE >
+    n = table_name() {schemaManager.dropTable(n);}
+}
+
+void desc_query() : { String n; } {
+    < DESC >
+    n = table_name() {schemaManager.desc(n);}
+}
+
+void show_tables_query() : {} {
+    < SHOW_TABLES > {schemaManager.showTables();}
+}
+
+void select_query() : {} {
+    < SELECT >
+    select_list()
+    table_expression()
+}
+
+void insert_query() : {} {
+    < INSERT_INTO >
+    table_name()
+    insert_col_source()
+}
+
+void delete_query() : {} {
+    < DELETE_FROM >
+    table_name()
+    (where_clause())?
+}
+
+// create
+void table_elem_list() : {} {
+    < LEFT_PAREN >
+    table_elem()
+    (< COMMA > table_elem())*
+    < RIGHT_PAREN >
+}
+
+void table_elem() : {} {
+    column_def()|table_const_def()
+}
+
+void column_def() : {} {
+    col_name()
+    data_type()
+    (< NOT_NULL >)?
+}
+
+void table_const_def() : {} {
+    primkey_const()|refrence_const()
+}
+
+void primkey_const() : {} {
+    < PRIMARY_KEY >
+    col_name_list()
+}
+
+void refrence_const() : {} {
+    < FOREIGN_KEY >
+    col_name_list()
+    < REFRENCES >
+    table_name()
+    col_name_list()
+}
+
+void insert_col_source() : {} {
+    (col_name_list())?
+    val_list()
+}
+
+void val_list() : {} {
+    < VALUES > < LEFT_PAREN > val() (< COMMA > val())* < RIGHT_PAREN >
+}
+
+void val() : {} {
+    < NULL >
+    | comparable_val()
+}
+
+//select
+void select_list() : {} {
+    < ASTER >
+    |selected_col()(< COMMA > selected_col())*
+}
+
+void selected_col() : {} {
+    (LOOKAHEAD(2)table_name()< DOT >)?
+    col_name()
+    (< AS > col_name())?
+}
+
+void table_expression() : {} {
+    from_clause()
+    (where_clause())?
+}
+
+void from_clause() : {} {
+    refered_table()
+    (< COMMA > refered_table())*
+}
+
+void refered_table() : { /*String table, alias;*/ } {
+    table_name()
+    (< AS > table_name())?
+}
+
+// where
+void where_clause() : {} {
+    < WHERE > bool_expression()
+}
+
+void bool_expression() : {} {
+    bool_term() (< OR > bool_term())*
+}
+
+void bool_term() : {} {
+    bool_factor() (< AND > bool_factor())*
+}
+
+void bool_factor() : {} {
+    (< NOT >)?
+    bool_test()
+}
+
+void bool_test() : {} {
+    predicate()
+    |paren_bool_expression()
+}
+
+void paren_bool_expression() : {} {
+    < LEFT_PAREN >
+    bool_expression()
+    < RIGHT_PAREN >
+}
+
+void predicate() : {} {
+    (LOOKAHEAD(3)
+    comp_predicate()
+    |null_predicate())
+}
+
+void comp_predicate() : {} {
+    comp_operand()
+    < COMP_OP >
+    comp_operand()
+}
+
+void comp_operand() : {} {
+    comparable_val()
+    |(LOOKAHEAD(2)table_name()< DOT >)? col_name()
+}
+
+void comparable_val() : {} {
+    < INT_VALUE >
+    |< CHAR_STRING >
+    |< DATE_VALUE >
+}
+
+void null_predicate() : {} {
+    (LOOKAHEAD(2)table_name() < DOT >)? col_name() null_op()
+}
+
+void null_op() : {} {
+    < IS >(< NOT >)?< NULL >
+}
+
+void col_name_list() : { String name; LinkedList<String> list = new LinkedList<String>();} {
+    < LEFT_PAREN >
+    name = col_name() { list.add(name); }
+    (< COMMA > name = col_name() { list.add(name); })*
+    < RIGHT_PAREN >
+}
+
+void data_type() : {} {
+    < INT >
+    |(< CHAR >< LEFT_PAREN >< INT_VALUE >< RIGHT_PAREN >)
+    |< DATE >
+}
+
+// identifiers
+String col_name() : { Token t; } {
+    t = < LEGAL_IDENTIFIER >{ return t.image.toString(); }
+}
+
+String table_name() : { Token t; } {
+    t = < LEGAL_IDENTIFIER >{ return t.image.toString(); }
+}
