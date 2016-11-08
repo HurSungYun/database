@@ -25,25 +25,23 @@ public class SimpleDBMSParser {
         SHOW_TABLES
     };
 
-    static SchemaManager schemaManager;
-
-    public static void main(String args[]) throws ParseException {
-
-        EnvironmentConfig ec = new EnvironmentConfig();
+    static EnvironmentConfig ec = new EnvironmentConfig();
+    static DatabaseConfig dc = new DatabaseConfig();
+    static {
         ec.setAllowCreate(true);
-        Environment env = new Environment(new File("db/"), ec);
-
-        DatabaseConfig dc = new DatabaseConfig();
         dc.setAllowCreate(true);
         dc.setSortedDuplicates(true);
+    }
+    static Environment env = new Environment(new File("db/"), ec);
+    static SchemaManager schemaManager = new SchemaManager(env, dc);
 
+    public static void main(String args[]) throws ParseException {
         SimpleDBMSParser p = new SimpleDBMSParser(System.in);
-        schemaManager = new SchemaManager(env, dc);
         System.out.print(PROMPT);
         while (true) {
             try {
                 p.command();
-            } catch (DBError.CreateError e) {
+            } catch (Errors.DBError e) {
                 System.out.println(e.getMessage());
             } catch (Throwable e) {
                 printMessage(QueryType.SYNTAX_ERROR);
@@ -57,12 +55,6 @@ public class SimpleDBMSParser {
             case SYNTAX_ERROR:
                 System.out.println("Syntax error");
                 break;
-            case CREATE_TABLE:
-                System.out.println("\'CREATE TABLE\' requested");
-                break;
-            case DESC:
-                System.out.println("\'DESC\' requested");
-                break;
             case SELECT:
                 System.out.println("\'SELECT\' requested");
                 break;
@@ -72,16 +64,15 @@ public class SimpleDBMSParser {
             case DELETE:
                 System.out.println("\'DELETE\' requested");
                 break;
-            case SHOW_TABLES:
-                System.out.println("\'SHOW TABLES\' requested");
-                break;
         }
         System.out.print(PROMPT);
+    }
+    static void close() {
     }
 }
 PARSER_END(SimpleDBMSParser)
 
-SKIP : { " " | "\r" | "\t" | "\n" }
+SKIP : {" " | "\r" | "\t" | "\n" }
 
 /* commands */
 TOKEN : {
@@ -160,17 +151,17 @@ TOKEN : {
 | < NON_Q_SP : "!"|"@"|"#"|"$"|"%"|"^"|"&"|"*"|"("|")"|"["|"]"|"-"|"+"|"_"|"="|"\\"|"{"|"}"|":"|";"|"<"|">"|","|"."|"/"|"?"|"`"|"~" >
 }
 
-void command() throws Exception : {} {
-    query_list()|< EXIT >< SEMICOLON >{System.exit(0);}
+void command() throws Errors.DBError : {} {
+    query_list()|< EXIT >< SEMICOLON >{close();System.exit(0);}
 }
 
-void query_list() : { QueryType q; } {
+void query_list() throws Errors.DBError : { QueryType q; } {
     ( q = query() < SEMICOLON > {
         printMessage(q);
     })+
 }
 
-QueryType query() : { QueryType q; } {
+QueryType query() throws Errors.DBError : { QueryType q; } {
     ( create_table_query() {
         q = QueryType.CREATE_TABLE;
     }|drop_table_query() {
@@ -190,23 +181,33 @@ QueryType query() : { QueryType q; } {
 }
 
 // query
-void create_table_query() : { String n; } {
+void create_table_query() throws Errors.DBError : {
+    Table t;
+    String n; 
+    LinkedList<Column> c = new LinkedList<Column>();
+    LinkedList<String> p = new LinkedList<String>();
+    LinkedList<Reference> r = new LinkedList<Reference>();
+} {
     < CREATE_TABLE >
     n = table_name()
-    table_elem_list()
+    table_elem_list(c, p, r)
+    {
+        t = new Table(n, c, p, r);
+        schemaManager.createTable(t);
+    }
 }
 
-void drop_table_query() : { String n; } {
+void drop_table_query() throws Errors.DBError : { String n; } {
     < DROP_TABLE >
     n = table_name() {schemaManager.dropTable(n);}
 }
 
-void desc_query() : { String n; } {
+void desc_query() throws Errors.DBError : { String n; } {
     < DESC >
     n = table_name() {schemaManager.desc(n);}
 }
 
-void show_tables_query() : {} {
+void show_tables_query() throws Errors.DBError : {} {
     < SHOW_TABLES > {schemaManager.showTables();}
 }
 
@@ -229,38 +230,69 @@ void delete_query() : {} {
 }
 
 // create
-void table_elem_list() : {} {
+void table_elem_list(List<Column>c,List<String>p,List<Reference>r) throws Errors.DBError : {
+} {
     < LEFT_PAREN >
-    table_elem()
-    (< COMMA > table_elem())*
+    table_elem(c, p, r)
+    (< COMMA > table_elem(c, p, r))*
     < RIGHT_PAREN >
 }
 
-void table_elem() : {} {
-    column_def()|table_const_def()
+void table_elem(List<Column>c,List<String>p,List<Reference>r) throws Errors.DBError : {
+    Column col;
+} {
+    col = column_def() {c.add(col);}
+    |table_const_def(p,r)
 }
 
-void column_def() : {} {
-    col_name()
-    data_type()
-    (< NOT_NULL >)?
+Column column_def() throws Errors.DBError : {
+    Column col;
+    String name;
+    Type t;
+    boolean n_n = false;
+} {
+    name = col_name()
+    t = data_type()
+    (< NOT_NULL >{ n_n = true; })?
+    {return new Column(name, t, n_n);}
 }
 
-void table_const_def() : {} {
-    primkey_const()|refrence_const()
+void table_const_def(List<String>p,List<Reference>r) throws Errors.DBError : {} {
+    primkey_const(p)
+    |refrence_const(r)
 }
 
-void primkey_const() : {} {
+void primkey_const(List<String>p) throws Errors.DBError : {
+    LinkedList<String> list;
+} {
     < PRIMARY_KEY >
-    col_name_list()
+    list = col_name_list()
+    {
+        if (!p.isEmpty()) throw new Errors.DuplicatePrimaryKeyDefError();
+        for(String s:list) p.add(s);
+    }
 }
 
-void refrence_const() : {} {
+void refrence_const(List<Reference>r) throws Errors.DBError : {
+    LinkedList<String> refer;
+    LinkedList<String> refee;
+    String table;
+} {
     < FOREIGN_KEY >
-    col_name_list()
+    refer = col_name_list()
     < REFRENCES >
-    table_name()
-    col_name_list()
+    table = table_name()
+    refee = col_name_list()
+    {
+        if (refer.size() != refee.size()) throw new Errors.IllForeignKeyDefError();
+        Iterator<String> er = refer.iterator();
+        Iterator<String> ee = refee.iterator();
+        while (er.hasNext()) {
+            String ercol = er.next();
+            String eecol = ee.next();
+            r.add(new Reference(ercol, eecol, table));
+        }
+    }
 }
 
 void insert_col_source() : {} {
@@ -364,24 +396,29 @@ void null_op() : {} {
     < IS >(< NOT >)?< NULL >
 }
 
-void col_name_list() : { String name; LinkedList<String> list = new LinkedList<String>();} {
+LinkedList<String> col_name_list() : {
+    String name;
+    LinkedList<String> list = new LinkedList<String>();
+} {
     < LEFT_PAREN >
     name = col_name() { list.add(name); }
     (< COMMA > name = col_name() { list.add(name); })*
     < RIGHT_PAREN >
+    { return list; }
 }
 
-void data_type() : {} {
-    < INT >
-    |(< CHAR >< LEFT_PAREN >< INT_VALUE >< RIGHT_PAREN >)
-    |< DATE >
+Type data_type() throws Errors.DBError : {Token t;} {
+    < INT > { return new Type(Type.INT, 1); }
+    |(< CHAR >< LEFT_PAREN >t = < INT_VALUE >< RIGHT_PAREN >)
+        { return new Type(Type.CHAR, Integer.parseInt(t.image.toString())); }
+    |< DATE > { return new Type(Type.DATE, 1); }
 }
 
 // identifiers
 String col_name() : { Token t; } {
-    t = < LEGAL_IDENTIFIER >{ return t.image.toString(); }
+    t = < LEGAL_IDENTIFIER >{ return t.image.toString().toLowerCase(); }
 }
 
 String table_name() : { Token t; } {
-    t = < LEGAL_IDENTIFIER >{ return t.image.toString(); }
+    t = < LEGAL_IDENTIFIER >{ return t.image.toString().toLowerCase(); }
 }
