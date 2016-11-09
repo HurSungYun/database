@@ -19,6 +19,6 @@ public class Column implements Serializable {
     }
 
     public String toString() {
-        return name+"\t\t"+type.toString()+"\t\t"+(notnull?"Y":"N")+"\t\t"+(pk&&refc!=null?"PRI/FOR":(pk?"PRI":(refc!=null?"FOR":"")));
+        return name+"\t\t"+type.toString()+"\t\t"+(notnull?"N":"Y")+"\t\t"+(pk&&refc!=null?"PRI/FOR":(pk?"PRI":(refc!=null?"FOR":"")));
     }
 }

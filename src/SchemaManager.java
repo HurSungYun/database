@@ -10,22 +10,43 @@ public class SchemaManager {
         schema = t == null ? new HashMap<String, Table>() : t;
     }
 
-    public void createTable(Table t) throws Errors.DBError {
+    public void createTable(Table t, List<Reference> l) throws Errors.DBError {
         // check duplicate name
         if (schema.get(t.name) != null)
             throw new Errors.TableExistenceError();
         // iter through reference
-        for (Reference r : t.refer.values()) {
+        for (Reference r : l) {
             Table rt = schema.get(r.table);
             if (rt == null)
                 throw new Errors.ReferenceTableExistenceError();
-            Column c = rt.columns.get(r.refee);
-            if (c == null)
-                throw new Errors.ReferenceColumnExistenceError();
-            if (!rt.pk.contains(c.name))
-                throw new Errors.ReferenceNonPrimaryKeyError();
-            if (!c.type.equals(t.columns.get(r.refer).type))
+            if (r.refer.size() != r.refee.size())
                 throw new Errors.ReferenceTypeError();
+            Iterator<String> er = r.refer.iterator();
+            Iterator<String> ee = r.refee.iterator();
+            while (er.hasNext()) {
+                String ner = er.next();
+                String nee = ee.next();
+                Column cer = t.columns.get(ner);
+                Column cee = rt.columns.get(nee);
+                if (cer == null)
+                    throw new Errors.NonExistingColumnDefError(ner);
+                if (cee == null)
+                    throw new Errors.ReferenceColumnExistenceError();
+                if (!cee.type.equals(cer.type))
+                    throw new Errors.ReferenceTypeError();
+            }
+            if (!(rt.pk.containsAll(r.refee)&&r.refee.containsAll(rt.pk)))
+                throw new Errors.ReferenceNonPrimaryKeyError();
+            er = r.refer.iterator();
+            ee = r.refee.iterator();
+            while (er.hasNext()) {
+                String ner = er.next();
+                String nee = ee.next();
+                Column cer = t.columns.get(ner);
+                cer.reft = r.table;
+                cer.refc = nee;
+            }
+            t.references.add(rt.name);
             rt.referenced.add(t.name);
         }
         schema.put(t.name, t);

@@ -1,11 +1,13 @@
 package simpledbms;
 
-import java.io.*;
+import java.util.*;
 
-public class Reference implements Serializable {
-    String refer, refee, table;
+public class Reference {
+    String table;
+    List<String> refer;
+    List<String> refee;
 
-    public Reference(String refer, String refee, String table) {
+    public Reference(List<String> refer, List<String> refee, String table) {
         this.refer = refer;
         this.refee = refee;
         this.table = table;

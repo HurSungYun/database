@@ -23,11 +23,6 @@ public class Errors {
             return super.getMessage() + "primary key definition is duplicated";
         }
     }
-    public static class IllForeignKeyDefError extends CreateError {
-        public String getMessage() {
-            return super.getMessage() + "number of columns do not match";
-        }
-    }
     public static class NoColumnForPrimaryKeyError extends CreateError {
         String name;
         public NoColumnForPrimaryKeyError(String n) {
@@ -82,7 +77,7 @@ public class Errors {
             name = n;
         }
         public String getMessage() {
-            return super.getMessage() + name + " is referenced by ither table";
+            return super.getMessage() + name + " is referenced by other table";
         }
     }
     public static class ShowTablesNoTable extends DBError {

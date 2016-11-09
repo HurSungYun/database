@@ -237,8 +237,8 @@ void create_table_query() : {
     n = table_name()
     try {
         (table_elem_list(c, p, r)) {
-            t = new Table(n, c, p, r);
-            schemaManager.createTable(t);
+            t = new Table(n, c, p);
+            schemaManager.createTable(t, r);
             put("schema", "schema", schemaManager.schema);
         }
     } catch (Exception e) {
@@ -353,18 +353,7 @@ void refrence_const(List<Reference>r) : {
     table = table_name()
     refee = col_name_list()
     {
-        try {
-            if (refer.size() != refee.size()) throw new Errors.IllForeignKeyDefError();
-            Iterator<String> er = refer.iterator();
-            Iterator<String> ee = refee.iterator();
-            while (er.hasNext()) {
-                String ercol = er.next();
-                String eecol = ee.next();
-                r.add(new Reference(ercol, eecol, table));
-            }
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
+        r.add(new Reference(refer, refee, table));
     }
 }
 
