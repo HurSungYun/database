@@ -8,14 +8,16 @@ public class Type implements Serializable {
     public static final int DATE = 2;
 
     int type, size;
-    Type(int type, int size) throws Errors.CharLengthError {
+    Type(int type, int size) {
         this.type = type;
         this.size = size;
-        if (type == 1 && size == 0)
-            throw new Errors.CharLengthError();
     }
 
     boolean equals(Type t) {
         return type==t.type&&(type==1?size==t.size:true);
+    }
+
+    public String toString() {
+        return (type==0?"int":(type==2?"date":("char("+size+")")));
     }
 }

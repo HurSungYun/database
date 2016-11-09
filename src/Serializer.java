@@ -1,4 +1,4 @@
-package simpledatabase;
+package simpledbms;
 
 import java.io.*;
 

@@ -4,11 +4,10 @@ import com.sleepycat.je.*;
 import java.util.*;
 
 public class SchemaManager {
-    Database db;
     HashMap<String, Table> schema;
 
-    public SchemaManager(Environment e, DatabaseConfig dc) {
-        db = e.openDatabase(null, "schema", dc);
+    public SchemaManager(HashMap<String, Table> t) {
+        schema = t == null ? new HashMap<String, Table>() : t;
     }
 
     public void createTable(Table t) throws Errors.DBError {
@@ -30,7 +29,7 @@ public class SchemaManager {
             rt.referenced.add(t.name);
         }
         schema.put(t.name, t);
-        save();
+        System.out.println("\'"+t.name+"\' table is created");
     }
 
     public void desc(String name) throws Errors.DBError {
@@ -52,7 +51,7 @@ public class SchemaManager {
         printBar();
     }
 
-    public void dropTable(String name) throws Errors.DBError{
+    public void dropTable(String name) throws Errors.DBError {
         Table t = schema.get(name);
         if (t == null)
             throw new Errors.NoSuchTable();
@@ -63,17 +62,10 @@ public class SchemaManager {
             rt.referenced.remove(name);
         }
         schema.remove(name);
-        save();
         System.out.println("\'"+name+"\' table is dropped");
     }
 
     void printBar() {
         System.out.println("----------------------------------");
-    }
- 
-    public void close() {
-    }
-
-    private void save() {
     }
 }

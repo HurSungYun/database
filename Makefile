@@ -1,4 +1,4 @@
-all:
+all: Parser.jj ./src/*.java
 	mkdir -p ./src/java
 	mkdir -p db
 	mkdir -p class

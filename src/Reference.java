@@ -2,7 +2,7 @@ package simpledbms;
 
 import java.io.*;
 
-public class Reference {
+public class Reference implements Serializable {
     String refer, refee, table;
 
     public Reference(String refer, String refee, String table) {
