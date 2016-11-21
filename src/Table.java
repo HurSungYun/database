@@ -11,7 +11,7 @@ public class Table implements Serializable {
     HashSet<String> references = new HashSet<String>();
     HashSet<String> referenced = new HashSet<String>();
 
-    public Table(String name, List<Column> c, List<String> p) throws Errors.DBError {
+    public Table(String name, List<Column> c, List<String> p, int pl) throws Errors.DBError {
         this.name = name;
         // add columns
         for (Column C : c) {
@@ -22,6 +22,8 @@ public class Table implements Serializable {
             columns.put(C.name, C);
         }
         // set PK
+        if (pl != p.size())
+            throw new Errors.DuplicatePrimaryKeyDefError();
         for (String s : p) {
             Column C = columns.get(s);
             if (C == null)

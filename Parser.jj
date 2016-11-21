@@ -111,6 +111,7 @@ public class SimpleDBMSParser {
         db.close();
         return null;
     }
+    static int pl;
 }
 PARSER_END(SimpleDBMSParser)
 
@@ -232,17 +233,19 @@ void create_table_query() : {
     LinkedList<Column> c = new LinkedList<Column>();
     LinkedList<String> p = new LinkedList<String>();
     LinkedList<Reference> r = new LinkedList<Reference>();
+    pl = 0;
 } {
     < CREATE_TABLE >
     n = table_name()
-    try {
-        (table_elem_list(c, p, r)) {
-            t = new Table(n, c, p);
+    (table_elem_list(c, p, r)) 
+    {
+        try {
+            t = new Table(n, c, p, pl);
             schemaManager.createTable(t, r);
             put("schema", "schema", schemaManager.schema);
+        }  catch (Exception e) {
+            System.out.println(e.getMessage());
         }
-    } catch (Exception e) {
-        System.out.println(e.getMessage());
     }
 }
 
@@ -295,7 +298,7 @@ void delete_query() : {} {
 }
 
 // create
-void table_elem_list(List<Column>c,List<String>p,List<Reference>r) throws Errors.DBError : {
+void table_elem_list(List<Column>c,List<String>p,List<Reference>r) : {
 } {
     < LEFT_PAREN >
     table_elem(c, p, r)
@@ -333,12 +336,8 @@ void primkey_const(List<String>p) : {
     < PRIMARY_KEY >
     list = col_name_list()
     {
-        try {
-            if (!p.isEmpty()) throw new Errors.DuplicatePrimaryKeyDefError();
-            for(String s:list) p.add(s);
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
+        pl = list.size();
+        for(String s:list) p.add(s);
     }
 }
 
