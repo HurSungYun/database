@@ -427,7 +427,7 @@ void paren_bool_expression() : {} {
 }
 
 void predicate() : {} {
-    (LOOKAHEAD(3)
+    (LOOKAHEAD(4)
     comp_predicate()
     |null_predicate())
 }
@@ -440,7 +440,7 @@ void comp_predicate() : {} {
 
 void comp_operand() : {} {
     comparable_val()
-    |(LOOKAHEAD(2)table_name()< DOT >)? col_name()
+    |(LOOKAHEAD(4)table_name()< DOT >)? col_name()
 }
 
 void comparable_val() : {} {
@@ -450,10 +450,11 @@ void comparable_val() : {} {
 }
 
 void null_predicate() : {} {
-    (LOOKAHEAD(2)table_name() < DOT >)? col_name() null_op()
+    (LOOKAHEAD(4)table_name() < DOT >)? col_name() null_op()
 }
 
 void null_op() : {} {
+    {System.out.println("is not null?");}
     < IS >(< NOT >)?< NULL >
 }
 
